@@ -120,8 +120,8 @@ int main(int argc, char *argv[])
       set_overscan(file_desc, coord);
    } else {
      get_overscan(file_desc, coord);
-     printf("%d %d %d %d\n", coord[0], coord[1], coord[2], coord[3]);
    }
+   printf("%d %d %d %d\n", coord[0], coord[1], coord[2], coord[3]);
 
    close(file_desc);
    return 0;

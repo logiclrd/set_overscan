@@ -146,15 +146,45 @@ stty intr '' susp ''
 trap 'stty $tty_save; tput cnorm ; exit'  INT HUP TERM
 
 # Going to modify top-left overscan
-whiptail --title "Instructions" --msgbox "We are going to dump some random data to the screen. Once the screen is full of random coloured dots use the arrow keys to increase or decrease the top-left corner's overscan & press the q key when finished." 12 50
+whiptail --title "Instructions" --msgbox "We are going to fill the screen with a checker pattern. Once the screen is full of dots use the arrow keys to increase or decrease the top-left corner's overscan and WSAD to move the lower-right corner & press the q key when finished." 12 50
 
 clear
 
 # We don't need no cursor messing up my pretty screen
 tput civis
 
-# Dump some random data to /dev/fb0
-cat rand >/dev/fb0
+# Make a checker pattern
+RESOLUTION=$(fbset | grep geometry | sed -E 's/.* ([0-9]+) ([0-9]+) .*/\1 \2/')
+XRES=$(echo $RESOLUTION | cut -f 1 -d ' ')
+YRES=$(echo $RESOLUTION | cut -f 2 -d ' ')
+(
+  Y=0
+  while [ $Y -lt 16 ]; do
+    X=0
+    while [ $X -lt $XRES ]; do
+      printf '\xFF\xFF\xFF\xFF\x00\x00\x00\x00'
+      let X=X+2
+    done
+    X=0
+    while [ $X -lt $XRES ]; do
+      printf '\x00\x00\x00\x00\xFF\xFF\xFF\xFF'
+      let X=X+2
+    done
+    let Y=Y+2
+  done
+) > /tmp/16scans
+
+(
+  Y=0
+  while [ $Y -lt $YRES ]; do
+    cat /tmp/16scans
+    let Y=Y+16
+  done
+) > /dev/fb0
+
+rm /tmp/16scans
+
+#cat rand >/dev/fb0
 
 # Set overscan top-left corner
 LOOP=1
@@ -171,51 +201,17 @@ while [ $LOOP -eq 1 ]; do
         	"$tty_cud1"|"$tty_kcud1"|"$tty_cudx") ((GPU_OVERSCAN_TOP++));;
         	"$tty_cub1"|"$tty_kcub1"|"$tty_cubx") ((GPU_OVERSCAN_LEFT--));;
         	"$tty_cuf1"|"$tty_kcuf1"|"$tty_cufx") ((GPU_OVERSCAN_LEFT++));;
+
+		"054") ((GPU_OVERSCAN_BOTTOM++));;
+		"157") ((GPU_OVERSCAN_BOTTOM--));;
+		"141") ((GPU_OVERSCAN_RIGHT++));;
+		"145") ((GPU_OVERSCAN_RIGHT--));;
+
 		"161") LOOP=0;; 
     	esac
 
-	./overscan $GPU_OVERSCAN_TOP $GPU_OVERSCAN_BOTTOM $GPU_OVERSCAN_LEFT $GPU_OVERSCAN_RIGHT
+	./overscan $GPU_OVERSCAN_TOP $GPU_OVERSCAN_BOTTOM $GPU_OVERSCAN_LEFT $GPU_OVERSCAN_RIGHT > /dev/null
 done
-
-# Clear the screen
-cat cleared >/dev/fb0
-clear
-
-# Going to modify bottom-right overscan
-whiptail --title "Instructions" --msgbox "We are going to dump some random data to the screen. Once the screen is full of random coloured dots use the arrow keys to increase or decrease the bottom-right corner's overscan & press the q key when finished." 12 50
-
-clear
-# No cursor messing up my pretty screen
-tput civis
-
-# Dump some random data to /dev/fb0
-cat rand >/dev/fb0
-
-# Set overscan bottom-right corner
-LOOP=1
-while [ $LOOP -eq 1 ]; do
-
-	TEXT=" TOP=$GPU_OVERSCAN_TOP, LEFT=$GPU_OVERSCAN_LEFT, BOTTOM=$GPU_OVERSCAN_BOTTOM, RIGHT=$GPU_OVERSCAN_RIGHT   "
-        LEN=$((${#TEXT}/2))
-        XPOS=$((XMIDPOINT-LEN))
-        echo -ne "\033[${YMIDPOINT};${XPOS}f$TEXT"
-
-        
-	keypress=$(dd bs=3 count=1 2> /dev/null | get_kc)
-	case "$keypress" in
-        	"$tty_cuu1"|"$tty_kcuu1") ((GPU_OVERSCAN_BOTTOM++));;
-        	"$tty_cud1"|"$tty_kcud1"|"$tty_cudx") ((GPU_OVERSCAN_BOTTOM--));;
-        	"$tty_cub1"|"$tty_kcub1"|"$tty_cubx") ((GPU_OVERSCAN_RIGHT++)) ;;
-        	"$tty_cuf1"|"$tty_kcuf1"|"$tty_cufx") ((GPU_OVERSCAN_RIGHT--));;
-        	"161") LOOP=0;;
-    	esac
-	./overscan $GPU_OVERSCAN_TOP $GPU_OVERSCAN_BOTTOM $GPU_OVERSCAN_LEFT $GPU_OVERSCAN_RIGHT
-
-done
-
-# Clear the screen
-cat cleared > /dev/fb0
-clear
 
 # Finished so update $CONFIG
 set_config_var disable_overscan 1 $CONFIG
